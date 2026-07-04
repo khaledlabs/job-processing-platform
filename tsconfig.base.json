@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "dist"
+  }
+}
+
+/* 
+important decisions:
+
+1- "module"/"moduleResolution": "NodeNext" -> This is the recommended setting for Node.js projects that use ES modules. It allows TypeScript to correctly resolve module imports and exports according to the Node.js module resolution algorithm.
+2- "strict": true —> bundles on the full family of strict-mode checks (no implicit any, null/undefined must be handled explicitly, etc.) as one flag
+3- "noUncheckedIndexedAccess": true —> This option ensures that when you access an array or object with an index, TypeScript will check if the index exists and is valid. It helps catch potential runtime errors related to accessing undefined properties.
+4- "forceConsistentCasingInFileNames": true" -> This option ensures that file names are treated consistently across the project, preventing issues related to case sensitivity in file paths.
+5- "isolatedModules": true" -> This option ensures that each file is treated as an isolated module, which can help catch certain types of errors and improve the overall type safety of the project.
+6- "declaration": true —> This option generates TypeScript declaration files (.d.ts) for your project, which can be useful for providing type information to consumers of your code.
+*/
