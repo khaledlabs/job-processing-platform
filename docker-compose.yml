@@ -20,9 +20,9 @@ services:
     ports:
       - "5433:5432"
     environment:
-      POSTGRES_USER: job_platform
-      POSTGRES_PASSWORD: job_platform
-      POSTGRES_DB: job_platform
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U job_platform"]
       interval: 10s
@@ -30,6 +30,20 @@ services:
       retries: 5
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
+  postgres-test:
+    image: postgres:16-alpine
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_USER: job_platform_test
+      POSTGRES_PASSWORD: job_platform_test
+      POSTGRES_DB: job_platform_test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U job_platform_test"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
@@ -50,8 +64,9 @@ services:
     ports:
       - "3010:3000"
     environment:
-      PORT: 3010
+      PORT: 3000
       HOST: 0.0.0.0
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     depends_on:
       rabbitmq:
         condition: service_healthy
