@@ -1,4 +1,6 @@
 import Fastify from "fastify";
+import { pool } from "./db/pool.js";
+import { jobRoutes } from "./routes/jobs.js";
 
 const server = Fastify({
   logger: true,
@@ -12,11 +14,14 @@ server.get("/health", async () => {
   };
 });
 
-const port = Number(process.env.PORT ?? 3000);
+const port = Number(process.env.PORT ?? 3010);
 const host = process.env.HOST ?? "0.0.0.0";
 
 async function start(): Promise<void> {
   try {
+    await pool.query("SELECT 1");
+    server.log.info("database connection verified");
+    await server.register(jobRoutes);
     await server.listen({ port, host });
   } catch (err) {
     server.log.error(err);
@@ -27,14 +32,10 @@ async function start(): Promise<void> {
 async function shutdown(signal: string): Promise<void> {
   server.log.info(`received ${signal}, shutting down`);
   await server.close();
+  await pool.end();
   process.exit(0);
 }
 
-// Kubernetes sends SIGTERM during rolling deploys (Milestone 11) — the
-// server needs to stop accepting connections cleanly when that happens,
-// not just get killed mid-request. Nothing here needs cleaning up yet,
-// but the pattern is worth establishing now rather than retrofitting it
-// once there's an actual queue connection to close gracefully too.
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
 process.on("SIGINT", () => void shutdown("SIGINT"));
 
