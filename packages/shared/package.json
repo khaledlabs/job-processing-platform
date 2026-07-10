@@ -12,7 +12,13 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
+  "dependencies": {
+    "amqplib": "^0.10.5",
+    "pino": "^9.6.0"
+  },
   "devDependencies": {
+    "@types/amqplib": "^0.10.6",
+    "@types/node": "^22.10.2",
     "typescript": "^5.7.2"
   }
 }
