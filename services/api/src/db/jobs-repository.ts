@@ -66,11 +66,12 @@ export async function createJob(params: {
   payload: unknown;
   correlationId: string;
 }): Promise<Job> {
-  const client = await pool.connect();
+  const client = await pool.connect(); // get a client from the pool
   try {
-    await client.query("BEGIN");
+    await client.query("BEGIN"); // begin a transaction
 
-    const insertResult = await client.query<JobRow>(
+    // insert the job into the jobs table and return the inserted row
+    const insertResult = await client.query<JobRow>(  
       `INSERT INTO jobs (type, payload, correlation_id)
        VALUES ($1, $2, $3)
        RETURNING *`,
@@ -80,17 +81,17 @@ export async function createJob(params: {
     if (!row) {
       throw new Error("job insert returned no row");
     }
-
+// you create the first event NULL -> pending so event history start immedatily 
     await client.query(
       `INSERT INTO job_events (job_id, correlation_id, from_status, to_status)
        VALUES ($1, $2, NULL, $3)`,
       [row.id, params.correlationId, row.status],
     );
-
+// if successful commit the transaction and return the job
     await client.query("COMMIT");
     return mapRowToJob(row);
   } catch (err) {
-    await client.query("ROLLBACK");
+    await client.query("ROLLBACK"); // rollback the transaction on error
     throw err;
   } finally {
     client.release();
@@ -143,4 +144,23 @@ export async function listJobs(params: {
   );
 
   return result.rows.map(mapRowToJob);
+}
+// markJobQueued updates the job status to 'queued' and records the transition in the job_events table. It uses a transaction to ensure both operations succeed or fail together.
+export async function markJobQueued(id: string, correlationId: string): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("UPDATE jobs SET status = 'queued' WHERE id = $1", [id]);
+    await client.query(
+      `INSERT INTO job_events (job_id, correlation_id, from_status, to_status)
+       VALUES ($1, $2, 'pending', 'queued')`,
+      [id, correlationId],
+    );
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
 }
