@@ -11,3 +11,5 @@ export {
 export type { RabbitConnection, JobMessageContext } from "./queue/rabbitmq.js";
 export { createLogger, childLoggerForJob } from "./logging/logger.js";
 export type { Logger, JobLogContext } from "./logging/logger.js";
+export { RetryableError, NonRetryableError, TimeoutError, classifyError } from "./errors/job-errors.js";
+export type { ErrorClassification } from "./errors/job-errors.js";
