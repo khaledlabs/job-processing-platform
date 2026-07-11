@@ -1,6 +1,7 @@
 import { createLogger, connectRabbitMQ, closeRabbitMQ, type RabbitConnection } from "@job-platform/shared";
 import { randomUUID } from "node:crypto";
 import { pool } from "./db/pool.js";
+import { registerFakeHandlers } from "./handlers/fake-handlers.js";
 
 const workerId = randomUUID();
 const logger = createLogger("worker").child({ workerId });
@@ -9,6 +10,9 @@ let rabbit: RabbitConnection | null = null;
 
 async function start(): Promise<void> {
   try {
+    registerFakeHandlers();
+    logger.info("job handlers registered");
+
     await pool.query("SELECT 1");
     logger.info("database connection verified");
 
