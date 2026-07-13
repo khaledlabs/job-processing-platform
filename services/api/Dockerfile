@@ -41,12 +41,13 @@ RUN addgroup -S app && adduser -S app -G app
 
 COPY --from=build /repo/node_modules ./node_modules
 COPY --from=build /repo/package.json ./package.json
-COPY --from=build /repo/services/api/node_modules ./services/api/node_modules
 COPY --from=build /repo/pnpm-workspace.yaml ./pnpm-workspace.yaml
 COPY --from=build /repo/packages/shared/dist ./packages/shared/dist
 COPY --from=build /repo/packages/shared/package.json ./packages/shared/package.json
+COPY --from=build /repo/packages/shared/node_modules ./packages/shared/node_modules
 COPY --from=build /repo/services/api/dist ./services/api/dist
 COPY --from=build /repo/services/api/package.json ./services/api/package.json
+COPY --from=build /repo/services/api/node_modules ./services/api/node_modules
 
 USER app
 EXPOSE 3000

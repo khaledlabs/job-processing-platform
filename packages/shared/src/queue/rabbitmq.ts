@@ -47,8 +47,9 @@ export interface JobMessageContext {
 export async function consumeJobMessages(
   channel: Channel,
   onMessage: (message: JobMessage, context: JobMessageContext) => Promise<void>,
+  concurrency = 1,
 ): Promise<void> {
-  await channel.prefetch(1);
+  await channel.prefetch(concurrency);
 
   await channel.consume(JOBS_QUEUE, (msg: ConsumeMessage | null) => {
     if (!msg) {
@@ -59,11 +60,6 @@ export async function consumeJobMessages(
     try {
       message = JSON.parse(msg.content.toString()) as JobMessage;
     } catch {
-      // Malformed JSON on the queue — can't be processed no matter how many
-      // times it's retried. Not acked as success, not requeued either
-      // (requeue: false), so it doesn't loop forever. Real poison-message
-      // classification and DLQ routing is Milestone 3/5 — this is the
-      // narrow, honest version of that idea for right now.
       channel.nack(msg, false, false);
       return;
     }
