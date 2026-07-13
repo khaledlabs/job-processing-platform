@@ -1,8 +1,24 @@
 import { describe, it, expect } from "vitest";
-import Ajv from "ajv";
+import AjvImport from "ajv";
 import { createJobBodySchema, jobIdParamsSchema } from "./job-schemas.js";
 
-const ajv = new Ajv();
+/**
+ * ajv's own type declarations are broken under TypeScript's NodeNext
+ * module resolution — a long-standing, still-unresolved upstream issue
+ * (ajv-validator/ajv#2047, #2204, #2381). The commonly-cited workaround
+ * (`import { default as Ajv } from "ajv"`) doesn't resolve it on this
+ * ajv version either — the "correct" import syntax has genuinely
+ * shifted across ajv's own releases, which isn't a target worth
+ * chasing further. Isolating the cast to this one line, with a minimal
+ * local type describing exactly the one method this file actually
+ * uses, gives real type safety for our own usage without pretending
+ * ajv's full type declarations can be trusted here.
+ */
+interface AjvLike {
+  compile: (schema: unknown) => (data: unknown) => boolean;
+}
+const AjvConstructor = AjvImport as unknown as new () => AjvLike;
+const ajv = new AjvConstructor();
 
 describe("createJobBodySchema", () => {
   it("accepts a valid job body", () => {

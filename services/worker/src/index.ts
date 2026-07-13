@@ -19,6 +19,8 @@ const logger = createLogger("worker").child({ workerId });
 const concurrency = Number(process.env.WORKER_CONCURRENCY ?? 1);
 
 let rabbit: RabbitConnection | null = null;
+let activeMessageCount = 0;
+let shuttingDown = false;
 
 async function start(): Promise<void> {
   try {
@@ -36,50 +38,50 @@ async function start(): Promise<void> {
     await consumeJobMessages(
       rabbit.channel,
       async (message, context) => {
-        const jobLogger = childLoggerForJob(logger, {
-          correlationId: message.correlationId,
-          jobId: message.jobId,
-        });
-
-        jobLogger.info({ type: message.type }, "message received");
-
-        const handler = getHandler(message.type);
-        if (!handler) {
-          jobLogger.error({ type: message.type }, "no handler registered for job type — treating as poison message");
-          await markJobFailed(message.jobId, message.correlationId, {
-            errorType: "non_retryable",
-            message: `No handler registered for job type "${message.type}"`,
-          });
-          context.ack();
-          return;
-        }
-
-        await markJobProcessing(message.jobId, message.correlationId);
-
+        activeMessageCount += 1;
         try {
-          await executeWithTimeout(
-            handler,
-            message.payload,
-            { jobId: message.jobId, correlationId: message.correlationId, attempts: message.attempts },
-            message.timeoutMs,
-          );
-          await markJobCompleted(message.jobId, message.correlationId);
-          jobLogger.info("job completed");
-        } catch (err) {
-          const classification = classifyError(err);
-          jobLogger.error(
-            { errorType: classification.errorType, errorMessage: classification.message },
-            "job failed",
-          );
-          await markJobFailed(message.jobId, message.correlationId, classification);
-        }
+          const jobLogger = childLoggerForJob(logger, {
+            correlationId: message.correlationId,
+            jobId: message.jobId,
+          });
 
-        // Acked unconditionally, success or failure — see Ticket 2's
-        // notes: Postgres's `status` column is the source of truth for
-        // whether a job actually succeeded, and there's no real
-        // retry-republish (Milestone 4) or DLQ routing (Milestone 5)
-        // mechanism yet for a nack to meaningfully act on.
-        context.ack();
+          jobLogger.info({ type: message.type }, "message received");
+
+          const handler = getHandler(message.type);
+          if (!handler) {
+            jobLogger.error({ type: message.type }, "no handler registered for job type — treating as poison message");
+            await markJobFailed(message.jobId, message.correlationId, {
+              errorType: "non_retryable",
+              message: `No handler registered for job type "${message.type}"`,
+            });
+            context.ack();
+            return;
+          }
+
+          await markJobProcessing(message.jobId, message.correlationId);
+
+          try {
+            await executeWithTimeout(
+              handler,
+              message.payload,
+              { jobId: message.jobId, correlationId: message.correlationId, attempts: message.attempts },
+              message.timeoutMs,
+            );
+            await markJobCompleted(message.jobId, message.correlationId);
+            jobLogger.info("job completed");
+          } catch (err) {
+            const classification = classifyError(err);
+            jobLogger.error(
+              { errorType: classification.errorType, errorMessage: classification.message },
+              "job failed",
+            );
+            await markJobFailed(message.jobId, message.correlationId, classification);
+          }
+
+          context.ack();
+        } finally {
+          activeMessageCount -= 1;
+        }
       },
       concurrency,
     );
@@ -91,16 +93,38 @@ async function start(): Promise<void> {
   }
 }
 
+async function waitForActiveMessages(timeoutMs: number): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (activeMessageCount > 0 && Date.now() < deadline) {
+    logger.info({ activeMessageCount }, "waiting for in-flight messages to finish");
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  if (activeMessageCount > 0) {
+    logger.error(
+      { activeMessageCount },
+      "shutdown timeout exceeded with messages still in flight — exiting anyway",
+    );
+  }
+}
+
 async function shutdown(signal: string): Promise<void> {
-  logger.info({ signal }, "shutting down");
+  if (shuttingDown) {
+    return;
+  }
+  shuttingDown = true;
+
+  logger.info({ signal, activeMessageCount }, "shutting down — waiting for in-flight messages");
+  await waitForActiveMessages(30_000);
+
   if (rabbit) {
     await closeRabbitMQ(rabbit);
   }
   await pool.end();
+  logger.info("shutdown complete");
   process.exit(0);
 }
 
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
 process.on("SIGINT", () => void shutdown("SIGINT"));
 
-void start(); 
+void start();
